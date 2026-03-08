@@ -95,6 +95,7 @@ export async function fetchTranscript(
       "Accept-Language": "en-US,en;q=0.9,ko;q=0.8",
       Accept:
         "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      Cookie: "CONSENT=PENDING+999; SOCS=CAESEwgDEgk2ODE4MTAyNjQaAmVuIAEaBgiA_LyaBg",
     },
   });
 
@@ -103,15 +104,6 @@ export async function fetchTranscript(
   }
 
   const html = await response.text();
-
-  if (
-    html.includes("consent.youtube.com") ||
-    html.includes("accounts.google.com")
-  ) {
-    throw new Error(
-      "YouTube requires consent or login for this video. Try a different video."
-    );
-  }
 
   const playerResponse = extractPlayerResponse(html);
   if (!playerResponse) {
