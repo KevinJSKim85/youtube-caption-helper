@@ -17,6 +17,11 @@ interface TranscriptState {
 
 export default function Home() {
   const [transcript, setTranscript] = useState<TranscriptState | null>(null);
+  const [enhancedSegments, setEnhancedSegments] = useState<
+    TranscriptSegment[] | null
+  >(null);
+  const [showEnhanced, setShowEnhanced] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +73,35 @@ export default function Home() {
     [inputUrl, fetchCaptions]
   );
 
+  const handleEnhance = useCallback(async () => {
+    if (!transcript) return;
+    setIsEnhancing(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoId: transcript.videoId,
+          segments: transcript.segments,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setEnhancedSegments(data.segments);
+      setShowEnhanced(true);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to enhance captions"
+      );
+    } finally {
+      setIsEnhancing(false);
+    }
+  }, [transcript]);
+
+  const activeSegments =
+    showEnhanced && enhancedSegments ? enhancedSegments : transcript?.segments;
+
   return (
     <main className="min-h-screen bg-gray-950 text-white">
       <header className="border-b border-gray-800 bg-gray-950/80 backdrop-blur-sm sticky top-0 z-10">
@@ -111,9 +145,58 @@ export default function Home() {
 
         {transcript && !isLoading && (
           <div className="space-y-4">
-            <h2 className="text-lg font-medium text-gray-300 truncate">
-              {transcript.title}
-            </h2>
+            <div className="flex items-center gap-4 flex-wrap">
+              <h2 className="text-lg font-medium text-gray-300 truncate flex-1 min-w-0">
+                {transcript.title}
+              </h2>
+
+              <div className="flex items-center gap-2">
+                {!enhancedSegments && !isEnhancing && (
+                  <button
+                    type="button"
+                    onClick={handleEnhance}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <span aria-hidden="true">+</span>
+                    Generate SDH Captions
+                  </button>
+                )}
+
+                {isEnhancing && (
+                  <div className="flex items-center gap-2 px-4 py-2 bg-purple-900/40 border border-purple-700 rounded-lg text-sm text-purple-300">
+                    <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                    Enhancing captions with AI...
+                  </div>
+                )}
+
+                {enhancedSegments && !isEnhancing && (
+                  <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowEnhanced(false)}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                        !showEnhanced
+                          ? "bg-gray-600 text-white"
+                          : "text-gray-400 hover:text-gray-200"
+                      }`}
+                    >
+                      Basic
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowEnhanced(true)}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                        showEnhanced
+                          ? "bg-purple-600 text-white"
+                          : "text-gray-400 hover:text-gray-200"
+                      }`}
+                    >
+                      SDH Enhanced
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <VideoPlayer
@@ -124,19 +207,21 @@ export default function Home() {
 
               <div className="bg-gray-900 rounded-xl border border-gray-800 h-[360px] lg:h-auto lg:max-h-[480px]">
                 <CaptionPanel
-                  segments={transcript.segments}
+                  segments={activeSegments || []}
                   currentTime={currentTime}
                   onSeek={handleSeek}
+                  isEnhanced={showEnhanced && !!enhancedSegments}
                 />
               </div>
             </div>
 
             <DownloadPanel
-              segments={transcript.segments}
+              segments={activeSegments || []}
               videoId={transcript.videoId}
               availableTracks={transcript.availableTracks}
               selectedTrack={transcript.selectedTrack}
               onLanguageChange={handleLanguageChange}
+              isEnhanced={showEnhanced && !!enhancedSegments}
             />
           </div>
         )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, ReactNode } from "react";
 import { TranscriptSegment } from "@/lib/types";
 import { formatDisplayTime } from "@/lib/subtitle";
 
@@ -8,12 +8,60 @@ interface CaptionPanelProps {
   segments: TranscriptSegment[];
   currentTime: number;
   onSeek: (time: number) => void;
+  isEnhanced?: boolean;
+}
+
+function renderSDHText(text: string, isActive: boolean): ReactNode {
+  const parts: ReactNode[] = [];
+  const bracketRegex = /\[([^\]]+)\]/g;
+  const speakerRegex = /^([A-Z][a-zA-Z\s]*?):\s*/;
+
+  let remaining = text;
+  const speakerMatch = remaining.match(speakerRegex);
+  if (speakerMatch) {
+    parts.push(
+      <span
+        key="speaker"
+        className={`font-bold ${isActive ? "text-cyan-300" : "text-cyan-500"}`}
+      >
+        {speakerMatch[1]}:
+      </span>,
+      " "
+    );
+    remaining = remaining.slice(speakerMatch[0].length);
+  }
+
+  let lastIndex = 0;
+  let bracketIdx = 0;
+  let match: RegExpExecArray | null = bracketRegex.exec(remaining);
+  while (match !== null) {
+    if (match.index > lastIndex) {
+      parts.push(remaining.slice(lastIndex, match.index));
+    }
+    parts.push(
+      <span
+        key={`b-${bracketIdx}`}
+        className={`italic text-sm ${isActive ? "text-purple-300" : "text-purple-400"}`}
+      >
+        [{match[1]}]
+      </span>
+    );
+    bracketIdx += 1;
+    lastIndex = match.index + match[0].length;
+    match = bracketRegex.exec(remaining);
+  }
+  if (lastIndex < remaining.length) {
+    parts.push(remaining.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : text;
 }
 
 export default function CaptionPanel({
   segments,
   currentTime,
   onSeek,
+  isEnhanced = false,
 }: CaptionPanelProps) {
   const activeRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,6 +98,14 @@ export default function CaptionPanel({
       aria-label="Caption display"
       aria-live="polite"
     >
+      {isEnhanced && (
+        <div className="flex items-center gap-2 px-4 py-2 mb-2 bg-purple-900/20 border border-purple-800/50 rounded-lg text-xs text-purple-300">
+          <span className="font-medium">SDH Enhanced</span>
+          <span className="text-purple-500">|</span>
+          <span className="italic text-purple-400">[sounds]</span>
+          <span className="font-bold text-cyan-500">Speaker:</span>
+        </div>
+      )}
       {segments.map((seg, i) => {
         const isActive = i === activeIndex;
         const isPast = i < activeIndex;
@@ -57,7 +113,7 @@ export default function CaptionPanel({
         return (
           <button
             type="button"
-            key={`${seg.start}`}
+            key={`${seg.start}-${seg.text.slice(0, 20)}`}
             ref={isActive ? activeRef : null}
             onClick={() => onSeek(seg.start)}
             aria-current={isActive ? "true" : undefined}
@@ -81,7 +137,7 @@ export default function CaptionPanel({
             >
               {formatDisplayTime(seg.start)}
             </span>
-            {seg.text}
+            {isEnhanced ? renderSDHText(seg.text, isActive) : seg.text}
           </button>
         );
       })}
